@@ -127,6 +127,11 @@ public class BranchMainController {
 
     @FXML
     private void createAccount(ActionEvent event) {
+        if (sessionBranch == null) {
+            showAlert("Error", "Branch not loaded.");
+            return;
+        }
+
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Create New Account");
 
@@ -170,12 +175,31 @@ public class BranchMainController {
                 // --- Generate random account number ---
                 String accNumber = DatabaseCreate.generateAccountNumber();
 
-                // --- Use current branch instance ---
-                if (sessionBranch == null) {
-                    showAlert("Error", "Branch not loaded.");
-                    return;
+                // --- Instantiate the correct Account subclass ---
+                Account newAcc = null;
+                switch (accType.toLowerCase()) {
+                    case "savings":
+                        newAcc = new SavingsAccount(accNumber, sessionBranch, accType, balance);
+                        if (interest != null) ((Interest) newAcc).setInterest(interest);
+                        break;
+                    case "investment":
+                        if (balance < 500) {
+                            showAlert("Error", "Minimum starting balance for investment is 500.");
+                            return;
+                        }
+                        newAcc = new InvestmentAccount(accNumber, sessionBranch, accType, balance);
+                        if (interest != null) ((Interest) newAcc).setInterest(interest);
+                        break;
+                    case "cheque":
+                        // Use the constructor for new Cheque accounts
+                        newAcc = new ChequeAccount(accNumber, sessionBranch, customerId, balance, companyAddr);
+                        break;
+                    default:
+                        showAlert("Error", "Invalid account type.");
+                        return;
                 }
 
+                // --- Save to database ---
                 boolean success = DatabaseCreate.createAccount(
                     accNumber,
                     accType,
@@ -187,19 +211,25 @@ public class BranchMainController {
                 );
 
                 if (success) {
-                    // Reflect in branch accounts
-                    Account newAcc = new Account(accNumber, accType, balance, sessionBranch.getBranchId(), customerId);
-                    sessionBranch.getAccounts().add(newAcc);
+                    // --- Add to sessionBranch and customer ---
+                    sessionBranch.addAccount(newAcc);
+                    Customer owner = sessionBranch.getCustomers().stream()
+                            .filter(c -> c.getIdNumber().equals(customerId))
+                            .findFirst()
+                            .orElse(null);
 
-                    // Refresh GUI (if your TableView is called accountTable)
-                    if (accountTable != null) {
-                        accountTable.getItems().add(newAcc);
-                        accountTable.refresh();
+                    if (owner != null) owner.addAccount(newAcc);
+
+                    // --- Refresh GUI ---
+                    if (accountSelector != null) {
+                        accountSelector.getItems().add(newAcc);
+                        accountSelector.getSelectionModel().select(newAcc);
+                        updateAccountDetails(newAcc);
                     }
 
-                    showAlert("Success", "Account created successfully!");
+                    showAlert("Success", "Account created successfully: " + accNumber);
                 } else {
-                    showAlert("Error", "Failed to create account.");
+                    showAlert("Error", "Failed to create account in database.");
                 }
 
             } catch (Exception e) {
