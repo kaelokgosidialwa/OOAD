@@ -4,7 +4,7 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public class Database {
+public class DatabaseRead {
 
     private static final String DB_URL = "jdbc:sqlite:resources/bank.db";
 
@@ -12,12 +12,7 @@ public class Database {
         return DriverManager.getConnection(DB_URL);
     }
 
-    /**
-     * Load branches by a specific column and value.
-     * @param searchColumn The column to filter by: "branch_id", "name", or "address".
-     * @param searchValue The value to match.
-     * @return List of matching Branch objects.
-     */
+    //
     public static List<Branch> queryBranch(String searchColumn, String searchValue) {
         List<Branch> branches = new ArrayList<>();
 
@@ -53,12 +48,7 @@ public class Database {
         return branches;
     }
     
-    /**
-     * Check credentials for branch login
-     * @param branchName The branch name entered
-     * @param password The branch password entered
-     * @return Fully loaded Branch object if credentials are correct, null otherwise
-     */
+    //
     public static Branch checkCredentialsBranch(String branchName, String password) {
         String sql = "SELECT * FROM Branch WHERE name = ? AND password = ?";
 
@@ -80,11 +70,11 @@ public class Database {
                 branch.setPassword(password); // already validated
 
                 // Load customers for this branch
-                Database.loadBranch(branch);
+                DatabaseRead.loadBranch(branch);
 
                 // Load accounts for all branch customers
                 for (Customer c : branch.getCustomers()) {
-                    Database.queryAccount("customer_id", c.getIdNumber(), c);
+                    DatabaseRead.queryAccount("customer_id", c.getIdNumber(), c);
                 }
 
                 return branch;
@@ -97,6 +87,7 @@ public class Database {
         return null; // credentials not found
     }
     
+    //
     public static List<Customer> queryCustomer(String column, String value) {
         List<Customer> customers = new ArrayList<>();
         String sql = "SELECT * FROM Customer WHERE " + column + " LIKE ?";
@@ -109,7 +100,7 @@ public class Database {
 
             while (rs.next()) {
                 Customer c = new Customer(
-                        rs.getString("id"),
+                        rs.getString("customer_id"),
                         rs.getString("firstname"),
                         rs.getString("lastname"),
                         rs.getString("address"),
@@ -125,6 +116,7 @@ public class Database {
         return customers;
     }
     
+    //
     public static Customer checkCredentialsCustomer(String firstName, String lastName, String password) {
         String sql = "SELECT * FROM Customer WHERE firstname = ? AND lastname = ? AND password = ?";
         try (Connection conn = getConnection();
@@ -137,7 +129,7 @@ public class Database {
             ResultSet rs = stmt.executeQuery();
             if (rs.next()) {
                 return new Customer(
-                    rs.getString("id"),
+                    rs.getString("customer_id"),
                     rs.getString("firstname"),
                     rs.getString("lastname"),
                     rs.getString("address"),
@@ -151,6 +143,7 @@ public class Database {
         return null; // login failed
     }
     
+    //
     public static List<Account> queryAccount(String column, String value, Customer customer) {
         List<Account> accounts = new ArrayList<>();
         String sql = "SELECT * FROM Account WHERE " + column + " LIKE ?";
@@ -201,10 +194,10 @@ public class Database {
         return accounts;
     }
     
+    //
     public static void loadBranch(Branch branch) {
         if (branch == null) return;
 
-        // 1️⃣ Load all customers linked to this branch via the BranchCustomer table
         String sql = "SELECT customer_id FROM BranchCustomer WHERE branch_id = ?";
 
         try (Connection conn = getConnection();
@@ -228,8 +221,10 @@ public class Database {
 
                 // 4️⃣ Add these accounts to the branch's master account list
                 for (Account acc : accounts) {
-                    if (!branch.getAccounts().contains(acc)) {
-                        branch.addAccount(acc); // branch and customer now reference the same Account objects
+                    boolean exists = branch.getAccounts().stream()
+                        .anyMatch(a -> a.getAccNumber().equals(acc.getAccNumber()));
+                    if (!exists) {
+                        branch.addAccount(acc);
                     }
                 }
 

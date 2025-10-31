@@ -44,7 +44,6 @@ public class ChequeAccount extends Account implements Withdrawal {
                "\nBalance: " + balance +
                "\nBranch ID: " + branchId +
                "\nCustomer ID: " + customerId +
-               "\nCompany Address: " + (companyAddress != null ? companyAddress : "N/A") +
-               "\nInterest: None (Cheque accounts do not earn interest)";
+               "\nCompany Address: " + (companyAddress != null ? companyAddress : "N/A");
     }
 }

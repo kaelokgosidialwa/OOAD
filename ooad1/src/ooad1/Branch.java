@@ -1,6 +1,5 @@
 package ooad1;
 
-import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -83,7 +82,6 @@ public class Branch {
 
     // --- Internal factory method ---
     private Account createNewAccount(String accType, Branch branch, Customer customer, double initialDeposit, String companyAddress) {
-        int branchId = branch.getBranchId();
         String customerId = customer.getIdNumber();
         String accNumber;
         switch (accType.toLowerCase()) {

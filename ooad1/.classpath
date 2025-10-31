@@ -8,7 +8,7 @@
 	<classpathentry kind="src" path="src"/>
 	<classpathentry excluding="src/|resources/" kind="src" path=""/>
 	<classpathentry kind="src" path="resources"/>
-	<classpathentry kind="lib" path="C:/Users/shiny/OneDrive/Desktop/eclipse-workspace/ooad1/resources/JAR/sqlite-jdbc-3.50.3.0.jar"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.USER_LIBRARY/JavaFXContained"/>
+	<classpathentry kind="lib" path="resources/JAR/sqlite-jdbc-3.50.3.0.jar"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>

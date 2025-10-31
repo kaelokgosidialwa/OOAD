@@ -47,7 +47,6 @@ public class SavingsAccount extends Account implements Interest {
                "\nBranch ID: " + branchId +
                "\nCustomer ID: " + customerId +
                "\nCompany Address: " + (companyAddress != null ? companyAddress : "N/A") +
-               "\nInterest Rate: " + (interest * 100) + "%" +
-               "\nWithdrawals: Not Allowed";
+               "\nInterest Rate: " + (interest * 100) + "%";
     }
 }

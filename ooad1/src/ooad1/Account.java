@@ -28,6 +28,7 @@ public abstract class Account {
     }
 
     //
+ // Getters
     public String getAccNumber() { return accNumber; }
     public double getBalance() { return balance; }
     public Branch getBranch() { return branch; }
@@ -35,6 +36,14 @@ public abstract class Account {
     public int getDbBranchId() { return dbBranchId; }
     public String getDbCustomerId() { return dbCustomerId; }
     public String getCompanyAddress() { return companyAddress; }
+
+    // Setters
+    public void setBalance(double balance) { this.balance = balance; }
+    public void setBranch(Branch branch) { this.branch = branch; }
+    public void setAccType(String accType) { this.accType = accType; }
+    public void setDbBranchId(int dbBranchId) { this.dbBranchId = dbBranchId; }
+    public void setDbCustomerId(String dbCustomerId) { this.dbCustomerId = dbCustomerId; }
+    public void setCompanyAddress(String companyAddress) { this.companyAddress = companyAddress; }
 
     //
     public String deposit(double amount) {

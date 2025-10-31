@@ -64,8 +64,12 @@ public class InvestmentAccount extends Account implements Interest, Withdrawal {
 
     @Override
     public String toString() {
-        return super.toString() +
-               "\nInterest Rate: " + (interest * 100) + "%" +
-               "\nMinimum Deposit: 500";
+        return "Account Type: Investment" +
+                "\nAccount Number: " + accNumber +
+                "\nBalance: " + balance +
+                "\nBranch ID: " + branchId +
+                "\nCustomer ID: " + customerId +
+                "\nCompany Address: " + (companyAddress != null ? companyAddress : "N/A") +
+                "\nInterest Rate: " + (interest * 100) + "%";
     }
 }

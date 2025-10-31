@@ -83,11 +83,11 @@ public class LoginScreenController {
             String password = branchPassword.getValue();
 
             // === Check credentials in DB ===
-            Branch branch = Database.checkCredentialsBranch(branchName, password);
+            Branch branch = DatabaseRead.checkCredentialsBranch(branchName, password);
 
             if (branch != null) {
                 // Load all customers and accounts for this branch
-                Database.loadBranch(branch);
+                DatabaseRead.loadBranch(branch);
 
                 // Store branch in session
                 SessionBranch.setBranch(branch);
@@ -166,11 +166,11 @@ public class LoginScreenController {
             String lastName = parts[1];
 
             // Check credentials via your new method
-            Customer customer = Database.checkCredentialsCustomer(firstName, lastName, password);
+            Customer customer = DatabaseRead.checkCredentialsCustomer(firstName, lastName, password);
 
             if (customer != null) {
                 // Load all accounts for this customer
-                Database.queryAccount("customer_id", customer.getIdNumber(), customer);
+                DatabaseRead.queryAccount("customer_id", customer.getIdNumber(), customer);
 
                 // Store the customer in SessionUser
                 SessionUser.setCustomer(customer);
@@ -203,5 +203,101 @@ public class LoginScreenController {
     @FXML
     private void SignUp(ActionEvent event) {
         System.out.println("Sign Up clicked.");
+
+        // Step 1: Ask user whether to sign up as Customer or Branch
+        ChoiceDialog<String> typeDialog = new ChoiceDialog<>("Customer", "Customer", "Branch");
+        typeDialog.setTitle("Sign Up");
+        typeDialog.setHeaderText("Choose the type of account to create");
+        typeDialog.setContentText("Select type:");
+
+        Optional<String> typeResult = typeDialog.showAndWait();
+        if (typeResult.isEmpty()) {
+            System.out.println("Sign-up cancelled.");
+            return;
+        }
+
+        String choice = typeResult.get();
+        boolean success = false;
+
+        // Step 2: Based on selection, show appropriate input dialogs
+        if (choice.equals("Customer")) {
+            TextInputDialog firstNameDialog = new TextInputDialog();
+            firstNameDialog.setTitle("Customer Sign Up");
+            firstNameDialog.setHeaderText("Enter first name");
+            Optional<String> firstName = firstNameDialog.showAndWait();
+            if (firstName.isEmpty()) return;
+
+            TextInputDialog lastNameDialog = new TextInputDialog();
+            lastNameDialog.setTitle("Customer Sign Up");
+            lastNameDialog.setHeaderText("Enter last name");
+            Optional<String> lastName = lastNameDialog.showAndWait();
+            if (lastName.isEmpty()) return;
+
+            TextInputDialog addressDialog = new TextInputDialog();
+            addressDialog.setTitle("Customer Sign Up");
+            addressDialog.setHeaderText("Enter address");
+            Optional<String> address = addressDialog.showAndWait();
+            if (address.isEmpty()) return;
+
+            TextInputDialog passwordDialog = new TextInputDialog();
+            passwordDialog.setTitle("Customer Sign Up");
+            passwordDialog.setHeaderText("Enter password");
+            Optional<String> password = passwordDialog.showAndWait();
+            if (password.isEmpty()) return;
+
+            // Auto-generate customer ID
+            String newId = DatabaseCreate.generateCustomerId();
+
+            // Save to database
+            success = DatabaseCreate.createCustomer(newId, firstName.get(), lastName.get(), address.get(), password.get());
+
+            if (success) {
+                showAlert(Alert.AlertType.INFORMATION, "Success", "Customer created!\nYour ID: " + newId);
+            } else {
+                showAlert(Alert.AlertType.ERROR, "Error", "Failed to create customer.");
+            }
+
+        } else if (choice.equals("Branch")) {
+            TextInputDialog nameDialog = new TextInputDialog();
+            nameDialog.setTitle("Branch Sign Up");
+            nameDialog.setHeaderText("Enter branch name");
+            Optional<String> branchName = nameDialog.showAndWait();
+            if (branchName.isEmpty()) return;
+
+            TextInputDialog addressDialog = new TextInputDialog();
+            addressDialog.setTitle("Branch Sign Up");
+            addressDialog.setHeaderText("Enter branch address");
+            Optional<String> branchAddress = addressDialog.showAndWait();
+            if (branchAddress.isEmpty()) return;
+
+            TextInputDialog passwordDialog = new TextInputDialog();
+            passwordDialog.setTitle("Branch Sign Up");
+            passwordDialog.setHeaderText("Enter password");
+            Optional<String> branchPassword = passwordDialog.showAndWait();
+            if (branchPassword.isEmpty()) return;
+
+            // Auto-generate branch ID
+            int newBranchId = DatabaseCreate.generateBranchId();
+
+            success = DatabaseCreate.createBranch(branchName.get(), branchAddress.get(), branchPassword.get());
+
+            if (success) {
+                showAlert(Alert.AlertType.INFORMATION, "Success", "Branch created!\nBranch ID: " + newBranchId);
+            } else {
+                showAlert(Alert.AlertType.ERROR, "Error", "Failed to create branch.");
+            }
+        }
     }
+
+    /**
+     * Reusable alert helper
+     */
+    private void showAlert(Alert.AlertType type, String title, String message) {
+        Alert alert = new Alert(type);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+
 }

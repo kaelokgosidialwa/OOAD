@@ -8,7 +8,7 @@
             xmlns:fx="http://javafx.com/fxml"
             fx:controller="ooad1.CustomerMainController">
 
-    <!-- 🧭 TOP: Menu Bar -->
+    <!-- TOP: Menu Bar -->
     <top>
         <MenuBar fx:id="menumain" VBox.vgrow="NEVER">
             <menus>
@@ -27,9 +27,10 @@
         </MenuBar>
     </top>
 
-    <!-- 💰 CENTER: Compact Customer Account Menu -->
+    <!-- CENTER: Compact Customer Account Menu -->
     <center>
         <VBox spacing="12" alignment="CENTER" style="-fx-padding: 20;">
+        	<Label fx:id="greetingLabel" style="-fx-font-size: 14;" />
             <Label text="Customer Menu" 
                    style="-fx-font-size: 18; -fx-font-weight: bold;"/>
 
@@ -45,11 +46,11 @@
             </HBox>
 
             <HBox spacing="10" alignment="CENTER">
-                <Button text="Deposit" onAction="#handleDeposit"
-                        style="-fx-background-color: #4CAF50; -fx-text-fill: white;"/>
-                <Button text="Withdraw" onAction="#handleWithdraw"
-                        style="-fx-background-color: #F44336; -fx-text-fill: white;"/>
-            </HBox>
+    			<Button text="Deposit" fx:id="depositButton" onAction="#handleDeposit"
+            		style="-fx-background-color: #4CAF50; -fx-text-fill: white;"/>
+    			<Button text="Withdraw" fx:id="withdrawButton" onAction="#handleWithdraw"
+            		style="-fx-background-color: #F44336; -fx-text-fill: white;"/>
+			</HBox>
 
             <HBox spacing="10" alignment="CENTER">
                 <Button text="View Transactions" onAction="#handleViewTransactions"/>

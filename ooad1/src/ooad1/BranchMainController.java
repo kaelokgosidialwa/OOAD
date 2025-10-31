@@ -1,12 +1,15 @@
 package ooad1;
 
 import java.io.IOException;
+import java.sql.SQLException;
 import java.util.Optional;
 
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
+import javafx.geometry.Insets;
 import javafx.scene.control.*;
+import javafx.scene.layout.VBox;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
 import javafx.scene.*;
@@ -33,7 +36,7 @@ public class BranchMainController {
     @FXML private Button closeButton;
     @FXML private Button payInterestButton;
 
-    // === Branch session ===
+    //
     private Branch sessionBranch;
 
     public void setSessionBranch(Branch branch) {
@@ -42,20 +45,19 @@ public class BranchMainController {
         loadAccounts();
     }
 
-    // -----------------------------
-    // Account dropdown and details
-    // -----------------------------
     private void loadAccounts() {
-        if (sessionBranch == null || sessionBranch.getAccounts().isEmpty()) return;
+        if (sessionBranch == null) return;
 
         accountSelector.getItems().clear();
-        accountSelector.getItems().addAll(sessionBranch.getAccounts());
+        for (Account acc : sessionBranch.getAccounts()) {
+            if (!accountSelector.getItems().contains(acc)) {
+                accountSelector.getItems().add(acc);
+            }
+        }
 
-        // Auto-select first account
         accountSelector.getSelectionModel().selectFirst();
         updateAccountDetails(accountSelector.getSelectionModel().getSelectedItem());
 
-        // Update details when selection changes
         accountSelector.setOnAction(e ->
                 updateAccountDetails(accountSelector.getSelectionModel().getSelectedItem()));
     }
@@ -74,9 +76,6 @@ public class BranchMainController {
         }
     }
 
-    // -----------------------------
-    // Menu actions
-    // -----------------------------
     @FXML
     private void PrevScene(ActionEvent event) {
         System.out.println("Going to previous scene... (placeholder)");
@@ -109,9 +108,6 @@ public class BranchMainController {
         }
     }
 
-    // -----------------------------
-    // Branch actions
-    // -----------------------------
     @FXML
     private void goToSearchDatabase(ActionEvent event) {
         try {
@@ -130,35 +126,135 @@ public class BranchMainController {
     }
 
     @FXML
-    private void CreateAccount(ActionEvent event) {
-        System.out.println("Navigating to account creation... (placeholder)");
-    }
+    private void createAccount(ActionEvent event) {
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Create New Account");
 
-    @FXML
-    private void seeBranchInfo(ActionEvent event) {
-        System.out.println("Viewing branch info... (placeholder)");
-    }
+        // --- Input Fields ---
+        TextField customerIdField = new TextField();
+        customerIdField.setPromptText("Customer ID (existing)");
 
-    // -----------------------------
-    // Account operations (placeholders)
-    // -----------------------------
-    @FXML
-    private void handleDeposit(ActionEvent event) {
-        Account selected = accountSelector.getSelectionModel().getSelectedItem();
-        if (selected != null) {
-            System.out.println("Deposit clicked for: " + selected.getAccNumber());
-            // TODO: Implement deposit logic here
+        ChoiceBox<String> accTypeBox = new ChoiceBox<>();
+        accTypeBox.getItems().addAll("savings", "investment", "cheque");
+
+        TextField balanceField = new TextField();
+        balanceField.setPromptText("Starting Balance");
+
+        TextField companyAddressField = new TextField();
+        companyAddressField.setPromptText("Company Address (for cheque)");
+
+        TextField interestField = new TextField();
+        interestField.setPromptText("Interest Rate (for savings/investment)");
+
+        VBox vbox = new VBox(10,
+            new Label("Customer ID:"), customerIdField,
+            new Label("Account Type:"), accTypeBox,
+            new Label("Starting Balance:"), balanceField,
+            companyAddressField,
+            interestField
+        );
+        vbox.setPadding(new Insets(10));
+        dialog.getDialogPane().setContent(vbox);
+
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        Optional<ButtonType> result = dialog.showAndWait();
+        if (result.isPresent() && result.get() == ButtonType.OK) {
+            try {
+                String accType = accTypeBox.getValue();
+                double balance = Double.parseDouble(balanceField.getText());
+                String companyAddr = companyAddressField.getText().isEmpty() ? null : companyAddressField.getText();
+                Double interest = interestField.getText().isEmpty() ? null : Double.parseDouble(interestField.getText());
+                String customerId = customerIdField.getText();
+
+                // --- Generate random account number ---
+                String accNumber = DatabaseCreate.generateAccountNumber();
+
+                // --- Use current branch instance ---
+                if (sessionBranch == null) {
+                    showAlert("Error", "Branch not loaded.");
+                    return;
+                }
+
+                boolean success = DatabaseCreate.createAccount(
+                    accNumber,
+                    accType,
+                    balance,
+                    sessionBranch.getBranchId(),
+                    customerId,
+                    companyAddr,
+                    interest
+                );
+
+                if (success) {
+                    // Reflect in branch accounts
+                    Account newAcc = new Account(accNumber, accType, balance, sessionBranch.getBranchId(), customerId);
+                    sessionBranch.getAccounts().add(newAcc);
+
+                    // Refresh GUI (if your TableView is called accountTable)
+                    if (accountTable != null) {
+                        accountTable.getItems().add(newAcc);
+                        accountTable.refresh();
+                    }
+
+                    showAlert("Success", "Account created successfully!");
+                } else {
+                    showAlert("Error", "Failed to create account.");
+                }
+
+            } catch (Exception e) {
+                showAlert("Error", "Invalid input: " + e.getMessage());
+            }
         }
     }
+
+
 
     @FXML
     private void handleWithdraw(ActionEvent event) {
         Account selected = accountSelector.getSelectionModel().getSelectedItem();
-        if (selected != null) {
-            System.out.println("Withdraw clicked for: " + selected.getAccNumber());
-            // TODO: Implement withdraw logic here
+        if (selected == null) return;
+
+        // Check withdrawal rules (e.g., savings cannot withdraw)
+        if (selected.getAccType().equalsIgnoreCase("savings")) {
+            showAlert(Alert.AlertType.INFORMATION, "Withdrawal Not Allowed", 
+                      "Withdrawals are not allowed from Savings accounts.");
+            return;
+        }
+
+        // Prompt for amount
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("Withdraw Funds");
+        dialog.setHeaderText("Withdraw from account " + selected.getAccNumber());
+        dialog.setContentText("Enter amount:");
+
+        Optional<String> input = dialog.showAndWait();
+        if (!input.isPresent()) return;
+
+        double amount;
+        try {
+            amount = Double.parseDouble(input.get());
+            if (amount <= 0 || amount > selected.getBalance()) throw new NumberFormatException();
+        } catch (NumberFormatException e) {
+            showAlert(Alert.AlertType.ERROR, "Invalid Amount", "Enter a valid amount within balance.");
+            return;
+        }
+
+        double oldBalance = selected.getBalance();
+        selected.setBalance(oldBalance - amount); // Update in memory
+
+        try {
+            DatabaseUpdate.saveAccount(selected); // Persist to DB
+            showAlert(Alert.AlertType.INFORMATION, "Withdrawal Successful", 
+                      "Withdrew $" + amount + ". New balance: $" + selected.getBalance());
+            updateAccountDetails(selected); // Update GUI
+        } catch (SQLException e) {
+            selected.setBalance(oldBalance); // rollback in memory
+            showAlert(Alert.AlertType.ERROR, "Withdrawal Failed", "Failed to save withdrawal. No changes made.");
+            e.printStackTrace();
         }
     }
+
 
     @FXML
     private void handleCloseAccount(ActionEvent event) {
@@ -172,9 +268,56 @@ public class BranchMainController {
     @FXML
     private void handlePayInterest(ActionEvent event) {
         Account selected = accountSelector.getSelectionModel().getSelectedItem();
-        if (selected != null) {
-            System.out.println("Pay interest clicked for: " + selected.getAccNumber());
-            // TODO: Implement interest payment logic here
+        if (selected == null) return;
+
+        if (!(selected instanceof Interest)) {
+            showAlert(Alert.AlertType.INFORMATION, "Interest Not Applicable",
+                      "Selected account does not earn interest.");
+            return;
         }
+
+        Interest interestAcc = (Interest) selected;
+
+        double oldBalance = selected.getBalance();
+
+        try {
+            // Apply interest — ensure this method actually updates the account's balance
+            interestAcc.payInterest(); // <-- should modify selected.balance internally
+
+            // Save updated account to DB
+            DatabaseUpdate.saveAccount(selected);
+
+            // Show message with updated balance
+            showAlert(Alert.AlertType.INFORMATION, "Interest Applied",
+                      "Interest applied successfully.\nNew balance: $" + selected.getBalance());
+
+            // Refresh GUI labels
+            updateAccountDetails(selected);
+
+        } catch (SQLException e) {
+            // Rollback balance in memory if saving failed
+            selected.setBalance(oldBalance);
+            showAlert(Alert.AlertType.ERROR, "Interest Failed",
+                      "Failed to save interest. No changes made.");
+            e.printStackTrace();
+        }
+    }
+
+
+    
+    private void showAlert(Alert.AlertType type, String title, String message) {
+        Alert alert = new Alert(type);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
+    }
+    
+    private void showAlert(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 }
