@@ -12,82 +12,61 @@ public class DatabaseRead {
         return DriverManager.getConnection(DB_URL);
     }
 
-    //
+    // -------------------------------
+    // Branch methods
+    // -------------------------------
+
     public static List<Branch> queryBranch(String searchColumn, String searchValue) {
         List<Branch> branches = new ArrayList<>();
-
-        // Validate the column name to prevent SQL injection
-        if (!searchColumn.equals("branch_id") && 
-            !searchColumn.equals("name") &&
-            !searchColumn.equals("address")) {
+        if (!searchColumn.equals("branch_id") && !searchColumn.equals("name") && !searchColumn.equals("address")) {
             throw new IllegalArgumentException("Invalid search column: " + searchColumn);
         }
 
         String sql = "SELECT * FROM Branch WHERE " + searchColumn + " LIKE ?";
-
         try (Connection conn = getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setString(1, "%" + searchValue + "%");
             ResultSet rs = stmt.executeQuery();
-
             while (rs.next()) {
-                Branch branch = new Branch(
-                        rs.getInt("branch_id"),
-                        rs.getString("name"),
-                        rs.getString("address")
-                );
-                branch.setPassword(rs.getString("password")); // if branch has a password
+                Branch branch = new Branch(rs.getInt("branch_id"), rs.getString("name"), rs.getString("address"));
+                branch.setPassword(rs.getString("password"));
                 branches.add(branch);
             }
-
         } catch (SQLException e) {
             e.printStackTrace();
         }
 
         return branches;
     }
-    
-    //
+
     public static Branch checkCredentialsBranch(String branchName, String password) {
         String sql = "SELECT * FROM Branch WHERE name = ? AND password = ?";
-
         try (Connection conn = getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
             stmt.setString(1, branchName);
             stmt.setString(2, password);
-
             ResultSet rs = stmt.executeQuery();
 
             if (rs.next()) {
-                int branchId = rs.getInt("branch_id");
-                String name = rs.getString("name");
-                String address = rs.getString("address");
+                Branch branch = new Branch(rs.getInt("branch_id"), rs.getString("name"), rs.getString("address"));
+                branch.setPassword(password);
 
-                // Create branch object
-                Branch branch = new Branch(branchId, name, address);
-                branch.setPassword(password); // already validated
-
-                // Load customers for this branch
-                DatabaseRead.loadBranch(branch);
-
-                // Load accounts for all branch customers
-                for (Customer c : branch.getCustomers()) {
-                    DatabaseRead.queryAccount("customer_id", c.getIdNumber(), c);
-                }
-
+                // Load all customers and accounts
+                loadBranch(branch);
                 return branch;
             }
-
         } catch (SQLException e) {
             e.printStackTrace();
         }
-
-        return null; // credentials not found
+        return null;
     }
-    
-    //
+
+    // -------------------------------
+    // Customer methods
+    // -------------------------------
+
     public static List<Customer> queryCustomer(String column, String value) {
         List<Customer> customers = new ArrayList<>();
         String sql = "SELECT * FROM Customer WHERE " + column + " LIKE ?";
@@ -106,17 +85,17 @@ public class DatabaseRead {
                         rs.getString("address"),
                         rs.getString("password")
                 );
-
+                queryAccountByCustomer(c.getIdNumber(), c);
                 customers.add(c);
             }
+
         } catch (SQLException e) {
             e.printStackTrace();
         }
 
         return customers;
     }
-    
-    //
+
     public static Customer checkCredentialsCustomer(String firstName, String lastName, String password) {
         String sql = "SELECT * FROM Customer WHERE firstname = ? AND lastname = ? AND password = ?";
         try (Connection conn = getConnection();
@@ -125,113 +104,142 @@ public class DatabaseRead {
             stmt.setString(1, firstName);
             stmt.setString(2, lastName);
             stmt.setString(3, password);
-
             ResultSet rs = stmt.executeQuery();
+
             if (rs.next()) {
                 return new Customer(
-                    rs.getString("customer_id"),
-                    rs.getString("firstname"),
-                    rs.getString("lastname"),
-                    rs.getString("address"),
-                    rs.getString("password")
+                        rs.getString("customer_id"),
+                        rs.getString("firstname"),
+                        rs.getString("lastname"),
+                        rs.getString("address"),
+                        rs.getString("password")
                 );
             }
 
         } catch (SQLException e) {
             e.printStackTrace();
         }
-        return null; // login failed
+        return null;
     }
-    
-    //
-    public static List<Account> queryAccount(String column, String value, Customer customer) {
+
+    // -------------------------------
+    // Account methods
+    // -------------------------------
+
+    public static List<Account> queryAccountByCustomer(String customerId, Customer customer) {
         List<Account> accounts = new ArrayList<>();
-        String sql = "SELECT * FROM Account WHERE " + column + " LIKE ?";
+        String sql = "SELECT * FROM Account WHERE customer_id = ?";
 
         try (Connection conn = getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setString(1, "%" + value + "%");
+            stmt.setString(1, customerId);
             ResultSet rs = stmt.executeQuery();
 
             while (rs.next()) {
-                String accNumber = rs.getString("accNumber");
-                String accType = rs.getString("accType");
-                double balance = rs.getDouble("balance");
-                int branchId = rs.getInt("branch_id");
-                String customerId = rs.getString("customer_id");
-                String companyAddress = rs.getString("companyAddress");
-                double interest = rs.getDouble("interest");
-
-                Account account = null;
-                switch (accType.toLowerCase()) {
-                    case "savings":
-                        account = new SavingsAccount(accNumber, accType, balance,
-                                branchId, customerId, companyAddress, interest);
-                        break;
-                    case "investment":
-                        account = new InvestmentAccount(accNumber, accType, balance,
-                                branchId, customerId, companyAddress, interest);
-                        break;
-                    case "cheque":
-                        account = new ChequeAccount(accNumber, accType, balance,
-                                branchId, customerId, companyAddress);
-                        break;
-                }
-
-                if (account != null) {
-                    accounts.add(account);
-                    if (customer != null) {
-                        customer.addAccount(account);
-                    }
+                Account acc = createAccountFromResultSet(rs);
+                if (acc != null) {
+                    accounts.add(acc);
+                    if (customer != null) customer.addAccount(acc);
                 }
             }
 
         } catch (SQLException e) {
             e.printStackTrace();
         }
-
         return accounts;
     }
-    
-    //
-    public static void loadBranch(Branch branch) {
-        if (branch == null) return;
 
-        String sql = "SELECT customer_id FROM BranchCustomer WHERE branch_id = ?";
+    public static List<Account> queryAccountByBranch(int branchId) {
+        List<Account> accounts = new ArrayList<>();
+        String sql = "SELECT * FROM Account WHERE branch_id = ?";
 
         try (Connection conn = getConnection();
              PreparedStatement stmt = conn.prepareStatement(sql)) {
 
-            stmt.setInt(1, branch.getBranchId());
+            stmt.setInt(1, branchId);
             ResultSet rs = stmt.executeQuery();
 
             while (rs.next()) {
-                String customerId = rs.getString("customer_id");
+                Account acc = createAccountFromResultSet(rs);
+                if (acc != null) accounts.add(acc);
+            }
 
-                // 2️⃣ Use queryCustomer to load the full customer object
-                List<Customer> customerList = queryCustomer("customer_id", customerId);
-                if (customerList.isEmpty()) continue;
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return accounts;
+    }
 
-                Customer customer = customerList.get(0);
+    private static Account createAccountFromResultSet(ResultSet rs) throws SQLException {
+        String accNumber = rs.getString("accNumber");
+        String accType = rs.getString("accType");
+        double balance = rs.getDouble("balance");
+        int branchId = rs.getInt("branch_id");
+        String customerId = rs.getString("customer_id");
+        String companyAddress = rs.getString("companyAddress");
+        double interest = rs.getDouble("interest");
 
-                // 3️⃣ Load accounts for this customer, but only keep accounts belonging to this branch
-                List<Account> accounts = queryAccount("customer_id", customerId, customer);
-                accounts.removeIf(acc -> acc.getDbBranchId() != branch.getBranchId());
+        switch (accType.toLowerCase()) {
+            case "savings":
+                return new SavingsAccount(accNumber, accType, balance, branchId, customerId, companyAddress, interest);
+            case "investment":
+                return new InvestmentAccount(accNumber, accType, balance, branchId, customerId, companyAddress, interest);
+            case "cheque":
+                return new ChequeAccount(accNumber, accType, balance, branchId, customerId, companyAddress);
+            default:
+                return null;
+        }
+    }
 
-                // 4️⃣ Add these accounts to the branch's master account list
-                for (Account acc : accounts) {
-                    boolean exists = branch.getAccounts().stream()
-                        .anyMatch(a -> a.getAccNumber().equals(acc.getAccNumber()));
-                    if (!exists) {
-                        branch.addAccount(acc);
+    // -------------------------------
+    // Helper: Branch & Customer relations
+    // -------------------------------
+
+    public static int getBranchIdByCustomer(String customerId) {
+        String sql = "SELECT branch_id FROM BranchCustomer WHERE customer_id = ?";
+        try (Connection conn = getConnection();
+             PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, customerId);
+            ResultSet rs = stmt.executeQuery();
+            if (rs.next()) return rs.getInt("branch_id");
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return -1;
+    }
+
+    public static void loadBranch(Branch branch) {
+        if (branch == null) return;
+
+        try {
+            // Load customers
+            String sql = "SELECT customer_id FROM BranchCustomer WHERE branch_id = ?";
+            try (Connection conn = getConnection();
+                 PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+                stmt.setInt(1, branch.getBranchId());
+                ResultSet rs = stmt.executeQuery();
+
+                while (rs.next()) {
+                    String customerId = rs.getString("customer_id");
+                    List<Customer> custList = queryCustomer("customer_id", customerId);
+                    if (!custList.isEmpty()) {
+                        Customer c = custList.get(0);
+                        if (!branch.getCustomers().contains(c)) branch.addCustomer(c);
                     }
                 }
+            }
 
-                // 5️⃣ Add the customer to the branch
-                if (!branch.getCustomers().contains(customer)) {
-                    branch.addCustomer(customer);
-                }
+            // Load branch accounts
+            List<Account> branchAccounts = queryAccountByBranch(branch.getBranchId());
+            for (Account acc : branchAccounts) {
+                branch.addAccount(acc);
+                Customer owner = branch.getCustomers().stream()
+                        .filter(c -> c.getIdNumber().equals(acc.getDbCustomerId()))
+                        .findFirst()
+                        .orElse(null);
+                if (owner != null && !owner.getAccounts().contains(acc)) owner.addAccount(acc);
             }
 
         } catch (SQLException e) {

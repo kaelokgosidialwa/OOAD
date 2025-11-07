@@ -2,21 +2,19 @@ package ooad1;
 
 import java.io.IOException;
 import java.sql.SQLException;
-import java.util.Optional;
-
+import java.util.*;
 import javafx.event.ActionEvent;
 import javafx.fxml.FXML;
 import javafx.fxml.FXMLLoader;
 import javafx.geometry.Insets;
+import javafx.scene.*;
 import javafx.scene.control.*;
 import javafx.scene.layout.VBox;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
-import javafx.scene.*;
 
 public class BranchMainController {
 
-    // --- FXML components ---
     @FXML private MenuBar menumain;
     @FXML private MenuItem prevmain;
     @FXML private MenuItem tologinmain;
@@ -36,7 +34,6 @@ public class BranchMainController {
     @FXML private Button closeButton;
     @FXML private Button payInterestButton;
 
-    //
     private Branch sessionBranch;
 
     public void setSessionBranch(Branch branch) {
@@ -49,17 +46,26 @@ public class BranchMainController {
         if (sessionBranch == null) return;
 
         accountSelector.getItems().clear();
+
+        // Use a Set to guarantee unique accounts
+        Set<String> seenAccountNumbers = new HashSet<>();
         for (Account acc : sessionBranch.getAccounts()) {
-            if (!accountSelector.getItems().contains(acc)) {
+            if (!seenAccountNumbers.contains(acc.getAccNumber())) {
                 accountSelector.getItems().add(acc);
+                seenAccountNumbers.add(acc.getAccNumber());
             }
         }
 
-        accountSelector.getSelectionModel().selectFirst();
-        updateAccountDetails(accountSelector.getSelectionModel().getSelectedItem());
+        // Select first account if exists
+        if (!accountSelector.getItems().isEmpty()) {
+            accountSelector.getSelectionModel().selectFirst();
+            updateAccountDetails(accountSelector.getSelectionModel().getSelectedItem());
+        }
 
-        accountSelector.setOnAction(e ->
-                updateAccountDetails(accountSelector.getSelectionModel().getSelectedItem()));
+        // Update labels when selection changes
+        accountSelector.setOnAction(e -> 
+            updateAccountDetails(accountSelector.getSelectionModel().getSelectedItem())
+        );
     }
 
     private void updateAccountDetails(Account account) {
@@ -77,9 +83,7 @@ public class BranchMainController {
     }
 
     @FXML
-    private void PrevScene(ActionEvent event) {
-        System.out.println("Going to previous scene... (placeholder)");
-    }
+    private void PrevScene(ActionEvent event) { System.out.println("Going to previous scene..."); }
 
     @FXML
     private void BackToLogin(ActionEvent event) {
@@ -87,24 +91,16 @@ public class BranchMainController {
         alert.setTitle("Log Out");
         alert.setHeaderText("This will log you out of the current session.");
         alert.setContentText("Are you sure you want to log out?");
-
         Optional<ButtonType> result = alert.showAndWait();
+
         if (result.isPresent() && result.get() == ButtonType.OK) {
             try {
                 FXMLLoader loader = new FXMLLoader(getClass().getResource("/scenes/LoginScreen.fxml"));
                 Parent root = loader.load();
-
                 Stage stage = (Stage) menumain.getScene().getWindow();
                 stage.setScene(new Scene(root));
                 stage.setTitle("Login");
-                stage.show();
-
-                System.out.println("Logged out and returned to login screen.");
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        } else {
-            System.out.println("Logout cancelled.");
+            } catch (IOException e) { e.printStackTrace(); }
         }
     }
 
@@ -113,18 +109,15 @@ public class BranchMainController {
         try {
             FXMLLoader loader = new FXMLLoader(getClass().getResource("/scenes/BranchSearch.fxml"));
             Parent root = loader.load();
-
             BranchSearchController controller = loader.getController();
             controller.setSessionBranch(sessionBranch);
-
             Stage stage = (Stage) SearchButton.getScene().getWindow();
             stage.setScene(new Scene(root));
             stage.setTitle("Branch Search");
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        } catch (IOException e) { e.printStackTrace(); }
     }
 
+    // -------------------- ACCOUNT ACTIONS --------------------
     @FXML
     private void createAccount(ActionEvent event) {
         if (sessionBranch == null) {
@@ -167,6 +160,11 @@ public class BranchMainController {
         if (result.isPresent() && result.get() == ButtonType.OK) {
             try {
                 String accType = accTypeBox.getValue();
+                if (accType == null) {
+                    showAlert("Error", "Please select an account type.");
+                    return;
+                }
+
                 double balance = Double.parseDouble(balanceField.getText());
                 String companyAddr = companyAddressField.getText().isEmpty() ? null : companyAddressField.getText();
                 Double interest = interestField.getText().isEmpty() ? null : Double.parseDouble(interestField.getText());
@@ -175,24 +173,21 @@ public class BranchMainController {
                 // --- Generate random account number ---
                 String accNumber = DatabaseCreate.generateAccountNumber();
 
-                // --- Instantiate the correct Account subclass ---
+                // --- Instantiate correct Account subclass in memory ---
                 Account newAcc = null;
                 switch (accType.toLowerCase()) {
                     case "savings":
-                        newAcc = new SavingsAccount(accNumber, sessionBranch, accType, balance);
-                        if (interest != null) ((Interest) newAcc).setInterest(interest);
+                        newAcc = new SavingsAccount(accNumber, accType, balance, sessionBranch.getBranchId(), customerId, null, interest);
                         break;
                     case "investment":
                         if (balance < 500) {
                             showAlert("Error", "Minimum starting balance for investment is 500.");
                             return;
                         }
-                        newAcc = new InvestmentAccount(accNumber, sessionBranch, accType, balance);
-                        if (interest != null) ((Interest) newAcc).setInterest(interest);
+                        newAcc = new InvestmentAccount(accNumber, accType, balance, sessionBranch.getBranchId(), customerId, null, interest);
                         break;
                     case "cheque":
-                        // Use the constructor for new Cheque accounts
-                        newAcc = new ChequeAccount(accNumber, sessionBranch, customerId, balance, companyAddr);
+                        newAcc = new ChequeAccount(accNumber, accType, balance, sessionBranch.getBranchId(), customerId, companyAddr);
                         break;
                     default:
                         showAlert("Error", "Invalid account type.");
@@ -211,143 +206,140 @@ public class BranchMainController {
                 );
 
                 if (success) {
-                    // --- Add to sessionBranch and customer ---
+                    // --- Add account to sessionBranch ---
                     sessionBranch.addAccount(newAcc);
+
+                    // --- Add to customer if loaded ---
                     Customer owner = sessionBranch.getCustomers().stream()
                             .filter(c -> c.getIdNumber().equals(customerId))
                             .findFirst()
                             .orElse(null);
-
                     if (owner != null) owner.addAccount(newAcc);
 
-                    // --- Refresh GUI ---
-                    if (accountSelector != null) {
+                    // --- Update GUI ---
+                    if (!accountSelector.getItems().contains(newAcc)) {
                         accountSelector.getItems().add(newAcc);
-                        accountSelector.getSelectionModel().select(newAcc);
-                        updateAccountDetails(newAcc);
                     }
+                    accountSelector.getSelectionModel().select(newAcc);
+                    updateAccountDetails(newAcc);
 
                     showAlert("Success", "Account created successfully: " + accNumber);
                 } else {
                     showAlert("Error", "Failed to create account in database.");
                 }
 
+            } catch (NumberFormatException e) {
+                showAlert("Error", "Invalid number input: " + e.getMessage());
             } catch (Exception e) {
-                showAlert("Error", "Invalid input: " + e.getMessage());
+                showAlert("Error", "Unexpected error: " + e.getMessage());
+                e.printStackTrace();
             }
         }
     }
 
 
+    @FXML
+    private void handleDeposit(ActionEvent event) {
+        Account selected = accountSelector.getSelectionModel().getSelectedItem();
+        if (selected == null) return;
+
+        TextInputDialog dialog = new TextInputDialog();
+        dialog.setTitle("Deposit Funds");
+        dialog.setHeaderText("Deposit into account " + selected.getAccNumber());
+        dialog.setContentText("Enter amount:");
+        Optional<String> input = dialog.showAndWait();
+        if (!input.isPresent()) return;
+
+        double amount;
+        try { amount = Double.parseDouble(input.get()); if (amount <= 0) throw new NumberFormatException(); }
+        catch (NumberFormatException e) { showAlert("Error", "Invalid amount."); return; }
+
+        double oldBalance = selected.getBalance();
+        selected.setBalance(oldBalance + amount);
+
+        try { DatabaseUpdate.saveAccount(selected); updateAccountDetails(selected); }
+        catch (SQLException e) { selected.setBalance(oldBalance); showAlert("Error", "Deposit failed."); e.printStackTrace(); }
+    }
 
     @FXML
     private void handleWithdraw(ActionEvent event) {
         Account selected = accountSelector.getSelectionModel().getSelectedItem();
         if (selected == null) return;
 
-        // Check withdrawal rules (e.g., savings cannot withdraw)
         if (selected.getAccType().equalsIgnoreCase("savings")) {
-            showAlert(Alert.AlertType.INFORMATION, "Withdrawal Not Allowed", 
-                      "Withdrawals are not allowed from Savings accounts.");
+            showAlert("Info", "Cannot withdraw from Savings accounts.");
             return;
         }
 
-        // Prompt for amount
         TextInputDialog dialog = new TextInputDialog();
         dialog.setTitle("Withdraw Funds");
         dialog.setHeaderText("Withdraw from account " + selected.getAccNumber());
         dialog.setContentText("Enter amount:");
-
         Optional<String> input = dialog.showAndWait();
         if (!input.isPresent()) return;
 
         double amount;
-        try {
-            amount = Double.parseDouble(input.get());
-            if (amount <= 0 || amount > selected.getBalance()) throw new NumberFormatException();
-        } catch (NumberFormatException e) {
-            showAlert(Alert.AlertType.ERROR, "Invalid Amount", "Enter a valid amount within balance.");
-            return;
-        }
+        try { amount = Double.parseDouble(input.get()); if (amount <= 0 || amount > selected.getBalance()) throw new NumberFormatException(); }
+        catch (NumberFormatException e) { showAlert("Error", "Invalid amount."); return; }
 
         double oldBalance = selected.getBalance();
-        selected.setBalance(oldBalance - amount); // Update in memory
+        selected.setBalance(oldBalance - amount);
 
-        try {
-            DatabaseUpdate.saveAccount(selected); // Persist to DB
-            showAlert(Alert.AlertType.INFORMATION, "Withdrawal Successful", 
-                      "Withdrew $" + amount + ". New balance: $" + selected.getBalance());
-            updateAccountDetails(selected); // Update GUI
-        } catch (SQLException e) {
-            selected.setBalance(oldBalance); // rollback in memory
-            showAlert(Alert.AlertType.ERROR, "Withdrawal Failed", "Failed to save withdrawal. No changes made.");
-            e.printStackTrace();
-        }
+        try { DatabaseUpdate.saveAccount(selected); updateAccountDetails(selected); }
+        catch (SQLException e) { selected.setBalance(oldBalance); showAlert("Error", "Withdrawal failed."); e.printStackTrace(); }
     }
-
 
     @FXML
     private void handleCloseAccount(ActionEvent event) {
         Account selected = accountSelector.getSelectionModel().getSelectedItem();
-        if (selected != null) {
-            System.out.println("Close account clicked for: " + selected.getAccNumber());
-            // TODO: Implement account closure here
-        }
+        if (selected == null) return;
+
+        boolean success = DatabaseDelete.deleteAccount(selected.getAccNumber());
+        if (success) {
+            sessionBranch.getAccounts().remove(selected);
+            accountSelector.getItems().remove(selected);
+            updateAccountDetails(null);
+            showAlert("Success", "Account closed successfully: " + selected.getAccNumber());
+        } else showAlert("Error", "Failed to delete account.");
     }
 
     @FXML
     private void handlePayInterest(ActionEvent event) {
         Account selected = accountSelector.getSelectionModel().getSelectedItem();
-        if (selected == null) return;
-
-        if (!(selected instanceof Interest)) {
-            showAlert(Alert.AlertType.INFORMATION, "Interest Not Applicable",
-                      "Selected account does not earn interest.");
-            return;
-        }
+        if (selected == null || !(selected instanceof Interest)) { showAlert("Info", "Interest not applicable."); return; }
 
         Interest interestAcc = (Interest) selected;
-
         double oldBalance = selected.getBalance();
-
         try {
-            // Apply interest — ensure this method actually updates the account's balance
-            interestAcc.payInterest(); // <-- should modify selected.balance internally
-
-            // Save updated account to DB
+            interestAcc.payInterest();
             DatabaseUpdate.saveAccount(selected);
-
-            // Show message with updated balance
-            showAlert(Alert.AlertType.INFORMATION, "Interest Applied",
-                      "Interest applied successfully.\nNew balance: $" + selected.getBalance());
-
-            // Refresh GUI labels
             updateAccountDetails(selected);
+            showAlert("Success", "Interest applied. New balance: $" + selected.getBalance());
+        } catch (SQLException e) { selected.setBalance(oldBalance); showAlert("Error", "Failed to apply interest."); e.printStackTrace(); }
+    }
 
-        } catch (SQLException e) {
-            // Rollback balance in memory if saving failed
-            selected.setBalance(oldBalance);
-            showAlert(Alert.AlertType.ERROR, "Interest Failed",
-                      "Failed to save interest. No changes made.");
-            e.printStackTrace();
+    @FXML
+    private void seeBranchInfo(ActionEvent event) {
+        if (sessionBranch == null) return;
+        int customerCount = sessionBranch.getCustomers().size();
+        int accountCount = 0;
+        double totalBalance = 0;
+
+        for (Customer c : sessionBranch.getCustomers()) {
+            for (Account a : c.getAccounts()) {
+                accountCount++;
+                totalBalance += a.getBalance();
+            }
         }
+
+        double avgBalance = accountCount > 0 ? totalBalance / accountCount : 0;
+        String info = String.format("Branch ID: %d\nName: %s\nAddress: %s\nCustomers: %d\nAccounts: %d\nTotal Balance: %.2f\nAverage Balance: %.2f",
+                sessionBranch.getBranchId(), sessionBranch.getName(), sessionBranch.getAddress(), customerCount, accountCount, totalBalance, avgBalance);
+        showAlert("Branch Info", info);
     }
 
-
-    
+    private void showAlert(String title, String message) { showAlert(Alert.AlertType.INFORMATION, title, message); }
     private void showAlert(Alert.AlertType type, String title, String message) {
-        Alert alert = new Alert(type);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
-    }
-    
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.INFORMATION);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+        Alert alert = new Alert(type); alert.setTitle(title); alert.setHeaderText(null); alert.setContentText(message); alert.showAndWait();
     }
 }

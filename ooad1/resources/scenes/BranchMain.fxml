@@ -61,7 +61,7 @@
     <!-- Branch Options -->
     <HBox spacing="20" alignment="CENTER">
         <Button fx:id="SearchButton" text="Search Users/Accounts" onAction="#goToSearchDatabase" prefWidth="200" prefHeight="50"/>
-        <Button fx:id="createAccount" text="Create A New Account" onAction="#CreateAccount" prefWidth="200" prefHeight="50"/>
+        <Button fx:id="createAccount" text="Create A New Account" onAction="#createAccount" prefWidth="200" prefHeight="50"/>
         <Button fx:id="BranchInfoButton" text="Branch Info" onAction="#seeBranchInfo" prefWidth="200" prefHeight="50"/>
     </HBox>
 </VBox>

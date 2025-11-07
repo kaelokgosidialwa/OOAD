@@ -10,7 +10,6 @@ import javafx.scene.layout.Region;
 import javafx.fxml.*;
 import javafx.stage.*;
 import java.util.*;
-import java.util.Optional;
 
 public class CustomerMainController {
 
@@ -31,7 +30,7 @@ public class CustomerMainController {
 
     @FXML
     private Label greetingLabel;
-    
+
     @FXML
     private MenuBar menumain;
 
@@ -43,13 +42,13 @@ public class CustomerMainController {
 
     @FXML
     private MenuItem tologinmain;
-    
+
     @FXML
     private Button withdrawButton;
-    
+
     @FXML
     private Button depositButton;
-    
+
     private List<String> sessionTransactions = new ArrayList<>();
 
     @FXML
@@ -58,122 +57,54 @@ public class CustomerMainController {
         if (sessionUser == null) return;
 
         // Set greeting
-        if (greetingLabel != null) {
-            greetingLabel.setText("Hello, " + sessionUser.getFirstName() + "!");
-        }
+        greetingLabel.setText("Hello, " + sessionUser.getFirstName() + "!");
 
-        // Populate account dropdown
+        // ✅ Load accounts directly from DB
+        DatabaseRead.queryAccountByCustomer(sessionUser.getIdNumber(), sessionUser);
+
+        // Populate ComboBox
         accountSelector.getItems().clear();
         accountSelector.getItems().addAll(sessionUser.getAccounts());
 
-        // Auto-select first account if available
+        // Select first account
         if (!sessionUser.getAccounts().isEmpty()) {
             accountSelector.getSelectionModel().selectFirst();
-            updateAccountDetails(accountSelector.getSelectionModel().getSelectedItem());
+            updateSelectedAccount();
         }
 
-        // Update account details and withdraw button when selection changes
-        accountSelector.setOnAction(e -> {
-            Account selected = accountSelector.getSelectionModel().getSelectedItem();
-            updateAccountDetails(selected);
-
-            if (selected != null && selected.getAccType().equalsIgnoreCase("savings")) {
-                withdrawButton.setDisable(true);
-                withdrawButton.setText("Cannot Withdraw");
-            } else {
-                withdrawButton.setDisable(false);
-                withdrawButton.setText("Withdraw");
-            }
-        });
+        // Update account details when selection changes
+        accountSelector.setOnAction(e -> updateSelectedAccount());
     }
 
     // ---------------------
-    // Update labels with selected account info
+    // Update account details and button state
     // ---------------------
-    private void updateAccountDetails(Account account) {
-        if (account == null) {
+    private void updateSelectedAccount() {
+        Account selected = accountSelector.getSelectionModel().getSelectedItem();
+        if (selected == null) {
             balanceLabel.setText("Balance: $0.00");
             typeLabel.setText("Account Type:");
             numberLabel.setText("Account Number:");
+            withdrawButton.setDisable(true);
+            withdrawButton.setText("Withdraw");
+            return;
+        }
+
+        balanceLabel.setText("Balance: $" + selected.getBalance());
+        typeLabel.setText("Account Type: " + selected.getAccType());
+        numberLabel.setText("Account Number: " + selected.getAccNumber());
+
+        if (selected.getAccType().equalsIgnoreCase("savings")) {
+            withdrawButton.setDisable(true);
+            withdrawButton.setText("Cannot Withdraw");
         } else {
-            balanceLabel.setText("Balance: $" + account.getBalance());
-            typeLabel.setText("Account Type: " + account.getAccType());
-            numberLabel.setText("Account Number: " + account.getAccNumber());
+            withdrawButton.setDisable(false);
+            withdrawButton.setText("Withdraw");
         }
     }
 
     // ---------------------
-    // Menu actions
-    // ---------------------
-    @FXML
-    private void PrevScene(ActionEvent event) {
-        System.out.println("Going to previous scene...");
-        // TODO: implement navigation logic
-    }
-
-    @FXML
-    private void BackToLogin(ActionEvent event) {
-        Customer sessionUser = SessionUser.getCustomer();
-        boolean saveFailed = false;
-
-        // Attempt to save the session user
-        if (sessionUser != null) {
-            try {
-                DatabaseUpdate.saveCustomer(sessionUser);
-            } catch (Exception e) {
-                saveFailed = true;
-                e.printStackTrace();
-            }
-        }
-
-        // Build the confirmation alert
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Log Out");
-
-        if (saveFailed) {
-            alert.setHeaderText("Saving Failed!");
-            alert.setContentText("Changes to your accounts could not be saved.\n" +
-                                 "Are you sure you want to log out? This session will not be reflected on your account!");
-        } else {
-            alert.setHeaderText("This will log you out of the current session.");
-            alert.setContentText("Are you sure you want to log out?");
-        }
-
-        Optional<ButtonType> result = alert.showAndWait();
-        if (result.isPresent() && result.get() == ButtonType.OK) {
-
-            // Clear session
-            SessionUser.clear();
-
-            try {
-                FXMLLoader loader = new FXMLLoader(getClass().getResource("/scenes/LoginScreen.fxml"));
-                Parent root = loader.load();
-
-                Stage stage = (Stage) menumain.getScene().getWindow();
-                stage.setScene(new Scene(root));
-                stage.setTitle("Login");
-                stage.show();
-
-                System.out.println("Logged out and returned to login screen.");
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        } else {
-            System.out.println("Logout cancelled.");
-        }
-    }
-
-    @FXML
-    private void handleAbout(ActionEvent event) {
-        Alert alert = new Alert(AlertType.INFORMATION);
-        alert.setTitle("About");
-        alert.setHeaderText("Banking System v0.1");
-        alert.setContentText("This system allows customers to manage their bank accounts — view, deposit, and withdraw funds.\n\nDeveloped by OOAD1 Team.");
-        alert.showAndWait();
-    }
-
-    // ---------------------
-    // Account actions (dummy logic)
+    // Account actions
     // ---------------------
     @FXML
     private void handleDeposit(ActionEvent event) {
@@ -206,24 +137,19 @@ public class CustomerMainController {
         Optional<ButtonType> result = confirm.showAndWait();
 
         if (result.isPresent() && result.get() == ButtonType.OK) {
-            double oldBalance = selected.getBalance(); // backup in case save fails
-            selected.setBalance(oldBalance + amount);   // update in memory
-
-            updateAccountDetails(selected);
+            double oldBalance = selected.getBalance();
+            selected.setBalance(oldBalance + amount);
             amountField.clear();
 
-            // Try to save
             try {
                 DatabaseUpdate.saveCustomer(SessionUser.getCustomer());
                 sessionTransactions.add("Deposited $" + amount + " into account " + selected.getAccNumber());
                 showAlert(Alert.AlertType.INFORMATION, "Deposit Successful",
                         "Successfully deposited $" + amount + " into account " + selected.getAccNumber() + ".");
+                updateSelectedAccount(); // update labels
             } catch (Exception ex) {
-                // Rollback in-memory balance
                 selected.setBalance(oldBalance);
-                updateAccountDetails(selected);
-                showAlert(Alert.AlertType.ERROR, "Deposit Failed",
-                        "Deposit failed. Your money has not been deposited.");
+                showAlert(Alert.AlertType.ERROR, "Deposit Failed", "Deposit failed. Your money has not been deposited.");
                 ex.printStackTrace();
             }
         }
@@ -262,27 +188,23 @@ public class CustomerMainController {
         Optional<ButtonType> result = confirm.showAndWait();
 
         if (result.isPresent() && result.get() == ButtonType.OK) {
-            double oldBalance = selected.getBalance(); // backup
+            double oldBalance = selected.getBalance();
             selected.setBalance(oldBalance - amount);
-
-            updateAccountDetails(selected);
 
             try {
                 DatabaseUpdate.saveCustomer(SessionUser.getCustomer());
                 sessionTransactions.add("Withdrew $" + amount + " from account " + selected.getAccNumber());
                 showAlert(Alert.AlertType.INFORMATION, "Withdrawal Successful",
                         "Withdrawal of $" + amount + " completed.\nNew balance: " + selected.getBalance());
+                updateSelectedAccount(); // update labels
             } catch (Exception ex) {
-                // Rollback in-memory balance
                 selected.setBalance(oldBalance);
-                updateAccountDetails(selected);
                 showAlert(Alert.AlertType.ERROR, "Withdrawal Failed",
                         "Withdrawal failed. Your money has been returned.");
                 ex.printStackTrace();
             }
         }
     }
-
 
     @FXML
     private void handleViewTransactions(ActionEvent event) {
@@ -294,7 +216,7 @@ public class CustomerMainController {
 
         boolean hasTransactions = false;
         for (String t : sessionTransactions) {
-            if (t.contains(selected.getAccNumber())) { // only show for this account
+            if (t.contains(selected.getAccNumber())) {
                 sb.append(t).append("\n");
                 hasTransactions = true;
             }
@@ -308,17 +230,73 @@ public class CustomerMainController {
         alert.setTitle("Session Transactions");
         alert.setHeaderText(null);
         alert.setContentText(sb.toString());
-        alert.getDialogPane().setMinHeight(Region.USE_PREF_SIZE); // makes long text scrollable
+        alert.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
         alert.showAndWait();
     }
 
     @FXML
-    private void handleRefresh(ActionEvent event) {
-        Account selected = accountSelector.getSelectionModel().getSelectedItem();
-        updateAccountDetails(selected);
-        System.out.println("Refreshed account details for: " + (selected != null ? selected.getAccNumber() : "none"));
+    private void handleAbout(ActionEvent event) {
+        Alert alert = new Alert(AlertType.INFORMATION);
+        alert.setTitle("About");
+        alert.setHeaderText("Banking System v0.1");
+        alert.setContentText("This system allows customers to manage their bank accounts — view, deposit, and withdraw funds.\n\nDeveloped by OOAD1 Team.");
+        alert.showAndWait();
     }
-    
+
+    // ---------------------
+    // Menu actions
+    // ---------------------
+    @FXML
+    private void PrevScene(ActionEvent event) {
+        System.out.println("Going to previous scene...");
+    }
+
+    @FXML
+    private void BackToLogin(ActionEvent event) {
+        Customer sessionUser = SessionUser.getCustomer();
+        boolean saveFailed = false;
+
+        if (sessionUser != null) {
+            try {
+                DatabaseUpdate.saveCustomer(sessionUser);
+            } catch (Exception e) {
+                saveFailed = true;
+                e.printStackTrace();
+            }
+        }
+
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Log Out");
+
+        if (saveFailed) {
+            alert.setHeaderText("Saving Failed!");
+            alert.setContentText("Changes to your accounts could not be saved.\n" +
+                                 "Are you sure you want to log out? This session will not be reflected on your account!");
+        } else {
+            alert.setHeaderText("This will log you out of the current session.");
+            alert.setContentText("Are you sure you want to log out?");
+        }
+
+        Optional<ButtonType> result = alert.showAndWait();
+        if (result.isPresent() && result.get() == ButtonType.OK) {
+            SessionUser.clear();
+            try {
+                FXMLLoader loader = new FXMLLoader(getClass().getResource("/scenes/LoginScreen.fxml"));
+                Parent root = loader.load();
+
+                Stage stage = (Stage) menumain.getScene().getWindow();
+                stage.setScene(new Scene(root));
+                stage.setTitle("Login");
+                stage.show();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+    // ---------------------
+    // Alert helper
+    // ---------------------
     private void showAlert(Alert.AlertType type, String title, String message) {
         Alert alert = new Alert(type);
         alert.setTitle(title);
