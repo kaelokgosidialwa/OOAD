@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<?import javafx.scene.control.*?>
+<?import javafx.scene.layout.*?>
+<?import javafx.geometry.Insets?>
+
+<BorderPane xmlns="http://javafx.com/javafx"
+            xmlns:fx="http://javafx.com/fxml"
+            fx:controller="ooad1.CustomerMainController">
+
+    <!-- TOP: Menu Bar -->
+    <top>
+        <MenuBar fx:id="menumain" VBox.vgrow="NEVER">
+            <menus>
+                <Menu fx:id="backmain" mnemonicParsing="false" text="Back">
+                    <items>
+                        <MenuItem fx:id="prevmain" mnemonicParsing="false" onAction="#PrevScene" text="Previous Scene" />
+                        <MenuItem fx:id="tologinmain" mnemonicParsing="false" onAction="#BackToLogin" text="Log Out" />
+                    </items>
+                </Menu>
+                <Menu mnemonicParsing="false" text="Help">
+                    <items>
+                        <MenuItem mnemonicParsing="false" text="About" onAction="#handleAbout"/>
+                    </items>
+                </Menu>
+            </menus>
+        </MenuBar>
+    </top>
+
+    <!-- CENTER: Compact Customer Account Menu -->
+    <center>
+        <VBox spacing="12" alignment="CENTER" style="-fx-padding: 20;">
+        	<Label fx:id="greetingLabel" style="-fx-font-size: 14;" />
+            <Label text="Customer Menu" 
+                   style="-fx-font-size: 18; -fx-font-weight: bold;"/>
+
+            <ComboBox fx:id="accountSelector" prefWidth="250" promptText="Select Account"/>
+
+            <Label fx:id="balanceLabel" text="Balance: $" />
+            <Label fx:id="typeLabel" text="Account Type:" />
+            <Label fx:id="numberLabel" text="Account Number:" />
+
+            <HBox spacing="8" alignment="CENTER">
+                <Label text="Amount:"/>
+                <TextField fx:id="amountField" prefWidth="120"/>
+            </HBox>
+
+            <HBox spacing="10" alignment="CENTER">
+    			<Button text="Deposit" fx:id="depositButton" onAction="#handleDeposit"
+            		style="-fx-background-color: #4CAF50; -fx-text-fill: white;"/>
+    			<Button text="Withdraw" fx:id="withdrawButton" onAction="#handleWithdraw"
+            		style="-fx-background-color: #F44336; -fx-text-fill: white;"/>
+			</HBox>
+
+            <HBox spacing="10" alignment="CENTER">
+                <Button text="View Transactions" onAction="#handleViewTransactions"/>
+                <Button text="Refresh" onAction="#handleRefresh"/>
+            </HBox>
+        </VBox>
+    </center>
+</BorderPane>
